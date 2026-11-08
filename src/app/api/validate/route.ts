@@ -6,7 +6,17 @@ export async function POST(req:NextRequest){
     const parsed=schema.safeParse(await req.json());
     if(!parsed.success)return NextResponse.json({valid:false,error:"A valid URL is required."},{status:400});
     const u=new URL(parsed.data.url);
-    const valid=u.protocol==="https:"&&["instagram.com","www.instagram.com"].includes(u.hostname)&&/^\/(p|reel|reels|tv)\/[A-Za-z0-9_-]+\/?$/.test(u.pathname);
-    return NextResponse.json({valid,previewAvailable:false,reason:valid?"The URL format is valid, but Instagram media preview and downloads are unavailable until an authorized provider is configured.":"Enter a complete Instagram post or Reel URL, including its media code."});
+    const path=u.pathname;
+    const valid=u.protocol==="https:"&&["instagram.com","www.instagram.com"].includes(u.hostname)&&/^\/(p|reel|reels|tv)\/[A-Za-z0-9_-]+\/?$/.test(path);
+    const mediaType=!valid?"unsupported":/^\/(reel|reels)\//.test(path)?"reel":/^\/tv\//.test(path)?"video":"post";
+    return NextResponse.json({
+      valid,
+      mediaType,
+      supportedFormats:valid?["image","video","carousel"]:[],
+      previewAvailable:false,
+      reason:valid
+        ?"The URL format is valid. Reels, posts, videos and carousel items can be handled once an authorized media provider is configured. Carousel detection requires provider metadata."
+        :"Enter a complete Instagram Reel, post or video URL, including its media code."
+    });
   }catch{return NextResponse.json({valid:false,error:"Invalid request."},{status:400});}
 }
