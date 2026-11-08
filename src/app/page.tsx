@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight, Check, CheckCircle2, Clipboard, Download, FileImage,
   FileVideo, Images, Instagram, Link2, LockKeyhole, Menu, ShieldCheck,
@@ -35,8 +35,19 @@ export default function Home() {
   const [category, setCategory] = useState<(typeof categories)[number]["id"]>("reels");
   const [fileName, setFileName] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [instagramProfile, setInstagramProfile] = useState<{username?: string; accountType?: string} | null>(null);
+  const [mediaItems, setMediaItems] = useState<Array<{id:string;source:"meta"|"provider";mediaType:string;mimeType?:string;filename?:string;url:string;thumbnailUrl?:string;caption?:string}>>([]);
+  const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("/api/instagram/status").then(r => r.json()).then(data => {
+      setConnected(Boolean(data.connected));
+      setInstagramProfile(data.profile || null);
+    }).catch(() => undefined);
+  }, []);
 
   async function checkLink() {
     if (!url.trim()) { setMessage("Paste an Instagram link to get started."); return; }
@@ -51,10 +62,30 @@ export default function Home() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: "instagram", url: url.trim() })
       });
       const data = await preview.json();
-      setMessage(data.message || "Link format accepted. Remote preview and download are not connected yet.");
+      setMediaItems(Array.isArray(data.items) ? data.items : []);
+      setMessage(data.message || "Link format accepted. No authorized source returned media for this link.");
     } catch {
       setMessage("We couldn't check this link right now. Please try again.");
     } finally { setBusy(false); }
+  }
+
+  async function downloadRemote(item: {id:string;source:"meta"|"provider";url:string;filename?:string}) {
+    setDownloadBusy(item.id);
+    try {
+      const response = await fetch("/api/media/download", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: item.source, url: item.url, filename: item.filename }) });
+      if (!response.ok) { const data = await response.json().catch(() => ({})); setMessage(data.error || "Download could not be completed."); return; }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a"); anchor.href = objectUrl; anchor.download = item.filename || "instasave-media"; anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+    } catch { setMessage("Download failed. Please try again."); }
+    finally { setDownloadBusy(null); }
+  }
+
+  async function disconnectInstagram() {
+    await fetch("/api/instagram/disconnect", { method: "POST" });
+    setConnected(false); setInstagramProfile(null); setMediaItems([]);
+    setMessage("Instagram account disconnected from this browser.");
   }
 
   async function pasteLink() {
@@ -120,6 +151,15 @@ export default function Home() {
             {message && <p className="status-message" role="status">{message}</p>}
             <div className="tool-foot"><span><LockKeyhole size={14}/> No login required</span><span><ShieldCheck size={14}/> Privacy first</span><span><CheckCircle2 size={14}/> No password or cookies</span></div>
           </div>
+          <div className="account-connect">
+            <div className="account-connect-copy"><strong>{connected ? `Connected${instagramProfile?.username ? ` as @${instagramProfile.username}` : " Instagram account"}` : "Connect your Instagram professional account"}</strong><span>{connected ? "InstaSave can check media exposed by this account." : "Use Meta's official Instagram Login for eligible Business and Creator accounts."}</span></div>
+            {connected ? <button className="connect-button connected-button" onClick={disconnectInstagram}>Disconnect</button> : <a className="connect-button" href="/api/instagram/connect"><Instagram size={16}/> Connect Instagram</a>}
+          </div>
+          {mediaItems.length > 0 && <div className="media-results">{mediaItems.map(item => <article className="media-result" key={item.id}>
+            {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="Media preview" /> : <div className="media-placeholder"><FileVideo size={26}/></div>}
+            <div className="media-result-info"><strong>{item.mediaType.replace("_", " ")}</strong><span>Source: {item.source === "meta" ? "Connected Meta account" : "Configured provider"}</span></div>
+            <button className="connect-button" disabled={downloadBusy === item.id} onClick={() => downloadRemote(item)}><Download size={15}/>{downloadBusy === item.id ? "Saving..." : "Download"}</button>
+          </article>)}</div>}
           <p className="hero-note">Only use content you own or are authorized to download. Private content is not supported.</p>
         </div>
       </section>
