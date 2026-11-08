@@ -57,7 +57,7 @@ export async function getProviderPreview(instagramUrl: string) {
     mimeType: item.mimeType || "application/octet-stream",
     filename: item.filename || `instasave-${index + 1}`,
     url: item.url,
-    thumbnailUrl: item.thumbnailUrl,
+    thumbnailUrl: item.thumbnailUrl && isApprovedMediaUrl(item.thumbnailUrl) ? item.thumbnailUrl : undefined,
     caption: item.caption,
   }));
 }
