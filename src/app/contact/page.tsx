@@ -1,0 +1,1 @@
+export default function Contact(){return <main style={{maxWidth:760,margin:"70px auto",padding:24}}><a href="/">← InstaSave</a><h1>Contact</h1><p>For support or privacy questions, contact the website operator using the support email configured before launch.</p><p>Support email has not yet been supplied.</p></main>}
